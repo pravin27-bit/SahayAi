@@ -1,0 +1,320 @@
+from pathlib import Path
+import zipfile, textwrap, json
+
+root = Path("/mnt/data/sahayai-welfare-finder")
+(root / "src").mkdir(parents=True, exist_ok=True)
+(root / "public").mkdir(exist_ok=True)
+
+files = {
+"package.json": r'''{
+  "name": "sahayai-welfare-finder",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^6.0.5"
+  }
+}''',
+
+"index.html": r'''<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Find public welfare schemes that may match your needs." />
+    <title>SahayAI — Public Welfare, Made Clear</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>''',
+
+"src/main.jsx": r'''import React, { useMemo, useState } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  ArrowRight, Search, ShieldCheck, FileText, Sparkles, MapPin,
+  Users, GraduationCap, HeartPulse, Home, Wallet, X, ChevronRight
+} from "lucide-react";
+import "./styles.css";
+
+const schemes = [
+  {
+    id: 1,
+    title: "Pradhan Mantri Awas Yojana",
+    short: "Housing assistance for eligible families.",
+    category: "Housing",
+    icon: Home,
+    tags: ["housing", "home", "urban", "rural"],
+    eligibility: "Eligibility depends on household income, housing status and the applicable PMAY component.",
+    benefit: "Housing support/subsidy under applicable components.",
+    documents: ["Aadhaar", "Income proof", "Address proof", "Bank details"],
+    source: "https://pmaymis.gov.in/"
+  },
+  {
+    id: 2,
+    title: "National Scholarship Portal",
+    short: "A single platform for multiple student scholarships.",
+    category: "Education",
+    icon: GraduationCap,
+    tags: ["education", "student", "scholarship", "school", "college"],
+    eligibility: "Eligibility varies by scholarship, education level, income and category.",
+    benefit: "Scholarship assistance according to the selected scheme.",
+    documents: ["Student ID", "Income certificate", "Bank details", "Academic records"],
+    source: "https://scholarships.gov.in/"
+  },
+  {
+    id: 3,
+    title: "Ayushman Bharat PM-JAY",
+    short: "Health coverage for eligible beneficiary families.",
+    category: "Health",
+    icon: HeartPulse,
+    tags: ["health", "hospital", "medical", "healthcare"],
+    eligibility: "Eligibility is determined using the programme's beneficiary database and applicable rules.",
+    benefit: "Cashless hospitalisation coverage at empanelled facilities, subject to scheme rules.",
+    documents: ["Beneficiary identification", "Government ID", "Other documents if requested"],
+    source: "https://pmjay.gov.in/"
+  },
+  {
+    id: 4,
+    title: "Pradhan Mantri Jan Dhan Yojana",
+    short: "Basic banking access and financial inclusion.",
+    category: "Finance",
+    icon: Wallet,
+    tags: ["bank", "finance", "account", "financial inclusion"],
+    eligibility: "Account opening requirements depend on applicable banking/KYC rules.",
+    benefit: "Basic savings account and access to eligible financial services.",
+    documents: ["Identity proof", "Address proof", "KYC documents"],
+    source: "https://pmjdy.gov.in/"
+  },
+  {
+    id: 5,
+    title: "National Social Assistance Programme",
+    short: "Social assistance programmes for eligible beneficiaries.",
+    category: "Social Support",
+    icon: Users,
+    tags: ["pension", "senior", "widow", "disability", "social support"],
+    eligibility: "Individual programme eligibility varies and may depend on age, household circumstances and state implementation.",
+    benefit: "Eligible social assistance under the applicable programme.",
+    documents: ["Identity proof", "Residence proof", "Income/BPL-related proof where applicable", "Bank details"],
+    source: "https://nsap.nic.in/"
+  }
+];
+
+function App() {
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("All");
+  const [showFinder, setShowFinder] = useState(false);
+  const [profile, setProfile] = useState({ state: "", age: "", student: "", income: "" });
+  const [selected, setSelected] = useState(null);
+
+  const categories = ["All", ...new Set(schemes.map(s => s.category))];
+
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return schemes.filter(s => {
+      const matchesCategory = category === "All" || s.category === category;
+      const haystack = [s.title, s.short, s.category, ...s.tags].join(" ").toLowerCase();
+      return matchesCategory && (!q || haystack.includes(q));
+    });
+  }, [query, category]);
+
+  const personalized = useMemo(() => {
+    const p = `${profile.student} ${profile.income}`.toLowerCase();
+    return schemes.filter(s => {
+      if (profile.student === "Yes" && s.category === "Education") return true;
+      if (profile.age === "60+" && s.category === "Social Support") return true;
+      if (p.includes("low") && ["Housing", "Health", "Finance"].includes(s.category)) return true;
+      return false;
+    });
+  }, [profile]);
+
+  return (
+    <div className="app">
+      <header className="nav">
+        <div className="brand">
+          <div className="brandMark"><Sparkles size={18}/></div>
+          <span>Sahay<span>AI</span></span>
+        </div>
+        <nav>
+          <a href="#schemes">Schemes</a>
+          <a href="#how">How it works</a>
+          <button className="navButton" onClick={() => setShowFinder(true)}>Find schemes <ArrowRight size={16}/></button>
+        </nav>
+      </header>
+
+      <main>
+        <section className="hero">
+          <div className="heroGlow" />
+          <div className="heroCopy">
+            <div className="eyebrow"><ShieldCheck size={15}/> Public welfare, made clear</div>
+            <h1>Find the support<br/><em>you may qualify for.</em></h1>
+            <p>Discover public welfare schemes in one simple place. Answer a few questions or search directly to understand what may be relevant to you.</p>
+            <div className="heroActions">
+              <button className="primary" onClick={() => setShowFinder(true)}>Find my schemes <ArrowRight size={18}/></button>
+              <a className="secondary" href="#schemes">Browse schemes</a>
+            </div>
+          </div>
+          <div className="heroCard">
+            <div className="miniTop"><span>Personalised discovery</span><Sparkles size={17}/></div>
+            <div className="miniQuestion">What kind of support are you looking for?</div>
+            <div className="chips">
+              {["Housing", "Education", "Health", "Finance"].map(x => (
+                <button key={x} onClick={() => {setQuery(x); document.getElementById("schemes").scrollIntoView({behavior:"smooth"})}}>
+                  {x}
+                </button>
+              ))}
+            </div>
+            <div className="miniFooter"><span className="dot"/> No account required</div>
+          </div>
+        </section>
+
+        <section className="trust">
+          <div><ShieldCheck/> <span>Designed for clarity</span></div>
+          <div><FileText/> <span>Official sources linked</span></div>
+          <div><MapPin/> <span>India-focused</span></div>
+        </section>
+
+        <section id="schemes" className="section">
+          <div className="sectionHead">
+            <div>
+              <div className="eyebrow">Explore</div>
+              <h2>Welfare schemes</h2>
+            </div>
+            <div className="searchBox"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search housing, student, health..." /></div>
+          </div>
+          <div className="categoryRow">
+            {categories.map(c => <button className={category===c?"active":""} onClick={()=>setCategory(c)} key={c}>{c}</button>)}
+          </div>
+          <div className="grid">
+            {results.map(s => <SchemeCard key={s.id} scheme={s} onClick={()=>setSelected(s)}/>)}
+          </div>
+          {!results.length && <div className="empty">No matching schemes found. Try a broader search.</div>}
+        </section>
+
+        <section id="how" className="how section">
+          <div className="sectionHead"><div><div className="eyebrow">Simple by design</div><h2>How it works</h2></div></div>
+          <div className="steps">
+            <Step n="01" title="Tell us about your needs" text="Answer a few optional questions about your situation."/>
+            <Step n="02" title="See relevant schemes" text="We match your answers with the scheme information in this demo."/>
+            <Step n="03" title="Check the official source" text="Review eligibility and application details on the linked official portal."/>
+          </div>
+        </section>
+      </main>
+
+      <footer><div className="brand"><div className="brandMark"><Sparkles size={15}/></div><span>Sahay<span>AI</span></span></div><span>Prototype welfare discovery interface</span></footer>
+
+      {showFinder && <Modal title="Find schemes for me" close={()=>setShowFinder(false)}>
+        <p className="modalIntro">These questions are optional. This prototype uses them only to suggest relevant categories.</p>
+        <label>State / Union Territory<input value={profile.state} onChange={e=>setProfile({...profile,state:e.target.value})} placeholder="e.g. Uttar Pradesh"/></label>
+        <label>Age group<select value={profile.age} onChange={e=>setProfile({...profile,age:e.target.value})}><option value="">Select</option><option>Under 18</option><option>18–59</option><option>60+</option></select></label>
+        <label>Are you a student?<select value={profile.student} onChange={e=>setProfile({...profile,student:e.target.value})}><option value="">Select</option><option>Yes</option><option>No</option></select></label>
+        <label>Household income category<select value={profile.income} onChange={e=>setProfile({...profile,income:e.target.value})}><option value="">Select</option><option>Low</option><option>Other</option></select></label>
+        <button className="primary full" onClick={()=>setShowFinder(false)}>Show relevant schemes <ArrowRight size={18}/></button>
+        {personalized.length > 0 && <div className="suggested"><strong>Suggested categories</strong><div>{[...new Set(personalized.map(x=>x.category))].map(x=><span key={x}>{x}</span>)}</div></div>}
+      </Modal>}
+
+      {selected && <Modal title={selected.title} close={()=>setSelected(null)}>
+        <div className="detailIcon">{React.createElement(selected.icon, {size:26})}</div>
+        <p>{selected.short}</p>
+        <h4>Eligibility</h4><p>{selected.eligibility}</p>
+        <h4>Potential benefit</h4><p>{selected.benefit}</p>
+        <h4>Commonly requested documents</h4>
+        <ul>{selected.documents.map(d=><li key={d}>{d}</li>)}</ul>
+        <a className="primary full linkButton" href={selected.source} target="_blank" rel="noreferrer">Open official source <ChevronRight size={17}/></a>
+      </Modal>}
+    </div>
+  );
+}
+
+function SchemeCard({scheme,onClick}) {
+  const Icon = scheme.icon;
+  return <article className="schemeCard" onClick={onClick}>
+    <div className="cardIcon"><Icon size={22}/></div>
+    <div className="cardBody"><div className="category">{scheme.category}</div><h3>{scheme.title}</h3><p>{scheme.short}</p><button>View details <ChevronRight size={16}/></button></div>
+  </article>
+}
+function Step({n,title,text}) {
+  return <div className="step"><span>{n}</span><h3>{title}</h3><p>{text}</p></div>
+}
+function Modal({title,close,children}) {
+  return <div className="overlay" onMouseDown={e=>e.target===e.currentTarget&&close()}><div className="modal"><button className="close" onClick={close}><X/></button><h2>{title}</h2>{children}</div></div>
+}
+createRoot(document.getElementById("root")).render(<App />);''',
+
+"src/styles.css": r'''@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;1,600&display=swap');
+
+:root{font-family:"DM Sans",system-ui,sans-serif;color:#18251f;background:#f8faf7;line-height:1.5;font-synthesis:none}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0}.app{min-height:100vh}
+.nav{height:76px;display:flex;align-items:center;justify-content:space-between;max-width:1180px;margin:auto;padding:0 24px}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:21px;letter-spacing:-.6px}.brand span span{font-weight:400}.brandMark{display:grid;place-items:center;width:31px;height:31px;border-radius:10px;background:#183d31;color:#fff}
+.nav nav{display:flex;align-items:center;gap:27px}.nav a{color:#52625a;text-decoration:none;font-size:14px}.navButton,.primary{border:0;background:#183d31;color:white;padding:12px 17px;border-radius:11px;font-weight:600;display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.hero{position:relative;max-width:1180px;margin:35px auto 0;padding:78px 70px 88px;border-radius:30px;overflow:hidden;background:#e9f0e9;display:grid;grid-template-columns:1.15fr .85fr;gap:60px;align-items:center}
+.heroGlow{position:absolute;width:440px;height:440px;border-radius:50%;background:#d3e3d5;right:-120px;top:-120px;filter:blur(3px)}
+.heroCopy,.heroCard{position:relative;z-index:1}.eyebrow{display:flex;align-items:center;gap:7px;text-transform:uppercase;letter-spacing:1.6px;font-size:11px;font-weight:700;color:#557167;margin-bottom:15px}
+h1{font-size:58px;line-height:1.03;letter-spacing:-2.6px;margin:0 0 20px;max-width:700px}h1 em{font-family:"Playfair Display",serif;font-weight:600;color:#507466}
+.heroCopy>p{font-size:17px;color:#596b63;max-width:610px}.heroActions{display:flex;align-items:center;gap:15px;margin-top:28px}.secondary{color:#29463c;text-decoration:none;font-weight:600;padding:12px 5px}
+.heroCard{background:rgba(255,255,255,.9);border:1px solid rgba(27,62,49,.09);border-radius:22px;padding:26px;box-shadow:0 20px 55px rgba(31,65,50,.12)}
+.miniTop{display:flex;justify-content:space-between;color:#698076;font-size:12px;font-weight:600}.miniQuestion{font-size:24px;line-height:1.2;font-weight:600;margin:25px 0}.chips{display:grid;grid-template-columns:1fr 1fr;gap:10px}.chips button,.categoryRow button{border:1px solid #d8e1db;background:white;border-radius:10px;padding:12px;text-align:left;cursor:pointer;color:#35483f}.chips button:hover{border-color:#779788}.miniFooter{margin-top:22px;color:#819088;font-size:12px}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#6e9b7f;margin-right:6px}
+.trust{max-width:1050px;margin:27px auto 75px;display:flex;justify-content:space-around;color:#66766e;font-size:13px}.trust div{display:flex;align-items:center;gap:8px}.trust svg{width:18px}
+.section{max-width:1080px;margin:0 auto;padding:30px 24px 90px}.sectionHead{display:flex;justify-content:space-between;align-items:end;gap:25px;margin-bottom:24px}.sectionHead h2{font-size:37px;letter-spacing:-1.3px;margin:0}.searchBox{width:340px;border:1px solid #d8e1dc;background:white;border-radius:12px;padding:11px 13px;display:flex;gap:9px;align-items:center}.searchBox input{border:0;outline:0;width:100%;font:inherit;background:transparent}.categoryRow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:23px}.categoryRow button{padding:8px 13px;text-align:center}.categoryRow button.active{background:#183d31;color:white;border-color:#183d31}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:15px}.schemeCard{display:flex;gap:17px;padding:22px;background:#fff;border:1px solid #e0e7e2;border-radius:17px;cursor:pointer;transition:.2s}.schemeCard:hover{transform:translateY(-2px);box-shadow:0 12px 35px rgba(20,50,37,.08)}.cardIcon{width:46px;height:46px;flex:none;display:grid;place-items:center;border-radius:13px;background:#edf4ee;color:#34604e}.category{font-size:10px;text-transform:uppercase;letter-spacing:1.2px;color:#779085;font-weight:700}.schemeCard h3{margin:5px 0 5px;font-size:18px}.schemeCard p{margin:0;color:#687870;font-size:13px}.schemeCard button{border:0;background:none;padding:13px 0 0;color:#295545;font-weight:700;display:flex;align-items:center;gap:4px;cursor:pointer}.empty{padding:35px;text-align:center;color:#75847d;background:white;border-radius:15px}
+.how{padding-top:10px}.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.step{background:#eef3ef;border-radius:18px;padding:25px}.step>span{font-size:12px;font-weight:700;color:#6d8379}.step h3{font-size:19px;margin:25px 0 7px}.step p{color:#697970;font-size:14px;margin:0}
+footer{border-top:1px solid #e0e6e2;max-width:1180px;margin:auto;padding:28px 24px 40px;display:flex;justify-content:space-between;color:#7a8982;font-size:12px}
+.overlay{position:fixed;inset:0;background:rgba(16,31,25,.45);backdrop-filter:blur(4px);display:grid;place-items:center;padding:20px;z-index:20}.modal{position:relative;background:#fff;border-radius:22px;padding:30px;width:min(520px,100%);max-height:90vh;overflow:auto;box-shadow:0 30px 90px rgba(0,0,0,.2)}.modal h2{font-size:27px;letter-spacing:-.8px;margin:0 0 17px}.close{position:absolute;right:16px;top:16px;border:0;background:#f0f3f1;border-radius:50%;width:34px;height:34px;display:grid;place-items:center;cursor:pointer}.modal label{display:block;font-size:13px;font-weight:600;margin:15px 0}.modal input,.modal select{display:block;width:100%;margin-top:7px;padding:11px;border:1px solid #d8e0db;border-radius:9px;font:inherit;background:white}.modalIntro{color:#6a7972;font-size:13px}.full{width:100%;justify-content:center;margin-top:18px}.suggested{margin-top:20px;background:#eef5ef;padding:14px;border-radius:12px;font-size:13px}.suggested div{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}.suggested span{background:white;padding:6px 9px;border-radius:8px}.detailIcon{width:52px;height:52px;border-radius:14px;background:#edf4ee;color:#34604e;display:grid;place-items:center;margin-bottom:12px}.modal h4{margin:18px 0 5px}.modal p,.modal li{color:#65756d;font-size:14px}.linkButton{text-decoration:none}
+@media(max-width:800px){.nav nav a{display:none}.hero{margin:15px 12px 0;padding:48px 25px;grid-template-columns:1fr;gap:35px}.hero h1{font-size:43px}.trust{margin:25px 20px 50px;flex-direction:column;gap:13px}.section{padding-left:18px;padding-right:18px}.sectionHead{align-items:start;flex-direction:column}.searchBox{width:100%}.grid,.steps{grid-template-columns:1fr}footer{margin:0 18px;flex-direction:column;gap:15px}.nav{padding:0 17px}}
+''',
+
+"README.md": r'''# SahayAI Welfare Finder
+
+An original React/Vite implementation of a public-welfare discovery interface inspired by the general concept of the supplied website.
+
+## Run locally
+
+Requirements: Node.js 18+.
+
+```bash
+npm install
+npm run dev
+```
+
+Then open the local URL shown by Vite.
+
+## Build
+
+```bash
+npm run build
+npm run preview
+```
+
+## Notes
+
+- This is an original implementation; it does not contain the private source code of the referenced website.
+- Scheme information in `src/main.jsx` is demo data. Verify current eligibility, benefits and application requirements on the linked official government portals before using the information in production.
+- To make this production-ready, move schemes into a backend/database and add server-side search/eligibility logic.
+'''
+}
+
+for rel, content in files.items():
+    p = root / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(textwrap.dedent(content).lstrip(), encoding="utf-8")
+
+zip_path = Path("/mnt/data/sahayai-welfare-finder-source.zip")
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+    for p in root.rglob("*"):
+        if p.is_file():
+            z.write(p, p.relative_to(root.parent))
+
+print(f"Created {zip_path}")
