@@ -18,3 +18,7 @@ The user can also interact with our AI Assistant using natural language. They ca
 Finally, SahayAI provides application preparation guidance and directs users toward the relevant official government source for the actual application.
 
 Our goal is to make welfare benefits easier to discover, easier to understand, and easier to access.
+
+
+link to our website prototype 
+https://welfare-finder-9.preview.emergentagent.com/?utm_source=share
